@@ -91,10 +91,27 @@ function func_check_0x1338ca92fa49(a0)
 
 ---
 
-## Requirements
+## Requirements & Node.js V8 Version Matching
 
-- Python 3.8+ (Standard Library only)
-- A compatible `d8` binary or V8 disassembler (e.g. V8 9.x, 10.x, 11.x, 12.x, 13.x).
+### Base Requirements
+- **Python 3.8+** (Standard Library only; no `pip` dependencies required).
+- A compatible **`d8` binary** or V8 disassembler matching target versions (e.g. V8 9.x, 10.x, 11.x, 12.x, 13.x).
+
+### Node.js Oracle & Strict V8 Version Matching
+While header decoding, root table lookup, function name discovery, and code simplification work natively in Python without Node, **resolving arbitrary read-only heap strings** relies on a Node.js deserialization oracle:
+
+- **Which feature uses Node?**
+  - Resolving opaque read-only heap string content (e.g. converting `<ro-heap [0,61616]>` into `"log"`) via runtime deserialization tracing (`--trace-deserialization`).
+- **Strict V8 Version Requirement:**
+  - The Node.js binary **must be built with the exact same major/minor V8 version** as the target `.jsc` bytecode. V8's internal read-only heap allocations and chunk offsets vary between engine releases.
+  - **Version Reference**:
+    - **V8 13.6.x** bytecode &rarr; requires **Node.js v24.x** (V8 13.6).
+    - **V8 11.3.x** bytecode &rarr; requires **Node.js v20.x** (V8 11.3).
+    - **V8 10.2.x** bytecode &rarr; requires **Node.js v18.x** (V8 10.2).
+    - **V8 9.4.x** bytecode &rarr; requires **Node.js v16.x** (V8 9.4).
+- **Graceful Fallback**:
+  - If a matching Node binary is absent or has a mismatched V8 version, View8 automatically falls back to static root tables and snapshot parsing without crashing, leaving readable `<ro-heap [chunk,offset]>` references.
+  - You can pass a specific Node binary via `--node /path/to/node`.
 
 ---
 
@@ -108,7 +125,7 @@ function func_check_0x1338ca92fa49(a0)
 - `--export_format`, `-e`: `decompiled` (default), `v8_opcode`, `translated`, `serialized`.
 - `--d8`: Path to `d8` executable.
 - `--d8-dir`: Directory containing versioned `d8` binaries (auto-selected by version).
-- `--node`: Path to `node` executable.
+- `--node`: Path to `node` executable (must match target V8 version for read-only heap oracle).
 - `--path`, `-p`: Path to custom disassembler binary.
 - `--scope`: Propagate scope arguments (default: `1`).
 - `--normalize`: Rebase address-based function names deterministically.
@@ -118,11 +135,11 @@ function func_check_0x1338ca92fa49(a0)
 ### Quick Start
 
 ```bash
-# Decompile a .jsc file directly
+# Decompile a .jsc file directly (using auto-detected d8/node)
 python3 view8.py --inp app.jsc --out app.decompiled.js
 
-# Decompile using a specific d8 binary
-python3 view8.py --inp app.jsc --d8 /path/to/d8 --out app.decompiled.js
+# Decompile using a specific d8 and matching Node.js binary
+python3 view8.py --inp app.jsc --d8 /path/to/d8-13.6 --node /path/to/node-v24 --out app.decompiled.js
 
 # Decompile an already disassembled dump
 python3 view8.py --inp dump.txt --input_format disassembled --out app.decompiled.js
