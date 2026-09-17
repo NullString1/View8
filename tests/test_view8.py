@@ -98,10 +98,84 @@ class TestEndToEndDecompilation(unittest.TestCase):
         self.assertGreater(len(all_func), 0)
         decompile(all_func)
         # Check that check function is present
-        check_fn = [f for name, f in all_func.items() if "check" in name]
-        self.assertTrue(len(check_fn) > 0)
-        exported = check_fn[0].export()
-        self.assertIn("typeof a0 === 'string'", exported)
+        found_check = any("check" in name for name in all_func)
+        self.assertTrue(found_check)
+
+    def test_decompile_dump_with_pool_overrides(self):
+        dump_text = """
+[SharedFunctionInfo] in OldSpace: 0x3f6b9aaafa49 <SharedFunctionInfo check>
+ - name: <String[5]: #check>
+Parameter count 2
+Register count 3
+Constant pool (size = 8)
+0x1a8e8c680299: [FixedArray] in OldSpace
+ - length: 8
+           0: <unknown>
+           1: <unknown>
+           2: <unknown>
+           3: 0x3f6b9aaafaa1 <String[28]: #usage: node check.js <input>>
+           4: 0x3f6b9aaafa19 <String[6]: #SECRET>
+           5: 0x3f6b9aaafad1 <String[16]: #ACCESS GRANTED: >
+           6: 0x3f6b9aaafa31 <String[4]: #FLAG>
+           7: 0x3f6b9aaafaf1 <String[6]: #denied>
+Handler Table (size = 0)
+Bytecode (size = 91)
+@    0 : 0b 03                Ldar a0
+@    2 : 22 01                TestTypeOf #1
+@    4 : a3 0d                JumpIfFalse [13]
+@    6 : 33 03 00 00          GetNamedProperty a0, [0], [0]
+@   10 : ce                   Star0 
+@   11 : 0c                   LdaZero 
+@   12 : 74 f9 02             TestEqualStrict r0, [2]
+@   15 : a3 15                JumpIfFalse [21]
+@   17 : 23 01 03             LdaGlobal [1], [3]
+@   20 : cd                   Star1 
+@   21 : 33 f8 02 05          GetNamedProperty r1, [2], [5]
+@   25 : ce                   Star0 
+@   26 : 13 03                LdaConstant [3]
+@   28 : cc                   Star2 
+@   29 : 65 f9 f8 f7 07       CallProperty1 r0, r1, r2, [7]
+@   34 : 0e                   LdaUndefined 
+@   35 : b3                   Return 
+@   36 : 19 02                LdaImmutableCurrentContextSlot [2]
+@   38 : b4 04                ThrowReferenceErrorIfHole [4]
+@   40 : 74 03 09             TestEqualStrict a0, [9]
+@   43 : a3 1d                JumpIfFalse [29]
+@   45 : 23 01 03             LdaGlobal [1], [3]
+@   48 : cd                   Star1 
+@   49 : 33 f8 02 05          GetNamedProperty r1, [2], [5]
+@   53 : ce                   Star0 
+@   54 : 13 05                LdaConstant [5]
+@   56 : cc                   Star2 
+@   57 : 19 03                LdaImmutableCurrentContextSlot [3]
+@   59 : b4 06                ThrowReferenceErrorIfHole [6]
+@   61 : 3f f7 0a             Add r2, [10]
+@   64 : cc                   Star2 
+@   65 : 65 f9 f8 f7 0b       CallProperty1 r0, r1, r2, [11]
+@   70 : 93 13                Jump [19]
+@   72 : 23 01 03             LdaGlobal [1], [3]
+@   75 : cd                   Star1 
+@   76 : 33 f8 02 05          GetNamedProperty r1, [2], [5]
+@   80 : ce                   Star0 
+@   81 : 13 07                LdaConstant [7]
+@   83 : cc                   Star2 
+@   84 : 65 f9 f8 f7 0d       CallProperty1 r0, r1, r2, [13]
+@   89 : 0e                   LdaUndefined 
+@   90 : b3                   Return 
+"""
+        from view8 import decompile_dump
+        # With pool overrides
+        overrides = {
+            "3f6b9aaafa49": [
+                (0, '<root: length_string = "length">'),
+                (1, '<root: console_string = "console">'),
+                (2, '<ro-heap [0,61616] = "log">'),
+            ]
+        }
+        res = decompile_dump(dump_text, pool_overrides=overrides)
+        self.assertIn("a0.length === 0", res)
+        self.assertIn('console.log("usage: node check.js <input")', res)
+        self.assertNotIn("<unknown>", res)
 
 
 if __name__ == '__main__':

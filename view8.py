@@ -35,7 +35,10 @@ def resolve_normalize_map_path(requested_path, out_path, input_path,
     root, _ = os.path.splitext(base_path)
     return f"{root}.name_map.csv"
 
-def disassemble(in_file, input_is_disassembled, disassembler):
+from typing import Optional, Union, Dict
+
+
+def disassemble(in_file, input_is_disassembled, disassembler, jsc_path=None):
     out_name = 'disasm.tmp'
     view8_dir = os.path.dirname(os.path.abspath(__file__))
     
@@ -46,9 +49,10 @@ def disassemble(in_file, input_is_disassembled, disassembler):
         parse_v8cache_file(in_file, out_name, view8_dir, disassembler)
     
     all_functions = parse_disassembled_file(out_name)
-    if not input_is_disassembled:
+    actual_jsc = in_file if not input_is_disassembled else jsc_path
+    if actual_jsc:
         from Parser.poolinfo import enrich_functions_from_jsc
-        enrich_functions_from_jsc(all_functions, in_file)
+        enrich_functions_from_jsc(all_functions, actual_jsc)
     return all_functions
 
 
@@ -58,12 +62,59 @@ def decompile(all_functions):
     for name in list(all_functions)[::-1]:
         all_functions[name].decompile(global_vars)
 
-def propagate_global_scope(all_func, verbosity):
+
+def propagate_global_scope(all_func, verbosity=0):
     if replace_global_scope(all_func, verbosity):
         if verbosity:
             print("Replace global scope done.")
         return True
     return False
+
+
+def decompile_dump(
+    dump_text: str,
+    jsc_source: Optional[Union[str, bytes]] = None,
+    pool_overrides: Optional[Dict[str, list]] = None,
+    scope: bool = True,
+    normalize: bool = False,
+    verbosity: int = 0,
+) -> str:
+    """Decompile disassembled bytecode dump text into JavaScript code.
+    
+    Args:
+        dump_text: Disassembled text representation of bytecode.
+        jsc_source: Optional path or bytes of .jsc bytecode cache for pool enrichment.
+        pool_overrides: Optional dict mapping function names or addresses to resolved pools.
+        scope: Propagate outer context/scope slot values.
+        normalize: Rebase function names to deterministic static addresses.
+        verbosity: Verbosity level (0-3).
+    Returns:
+        Decompiled JavaScript code string.
+    """
+    from Parser.parse_v8cache import parse_disassembled_text
+    all_func = parse_disassembled_text(dump_text)
+
+    if pool_overrides or jsc_source:
+        from Parser.poolinfo import enrich_functions_from_jsc
+        enrich_functions_from_jsc(
+            all_func,
+            jsc_source=jsc_source,
+            pool_overrides=pool_overrides,
+        )
+
+    if normalize:
+        all_func = normalize_function_names(all_func, verbosity=verbosity)
+
+    decompile(all_func)
+
+    if scope:
+        propagate_global_scope(all_func, verbosity)
+
+    chunks = []
+    for fn in list(all_func)[::-1]:
+        if all_func[fn].visible:
+            chunks.append(all_func[fn].export(export_decompiled=True))
+    return "\n".join(chunks)
 
 ###
 
@@ -136,6 +187,7 @@ def main():
     parser.add_argument('--func', help="A function to be displayed.", default=None, required=False)
     parser.add_argument('--show_all', help="Should show lines marked as hidden (in function display mode)", default=False, required=False, action='store_true')
     parser.add_argument('--verbosity', '-v', help="Verbosity level (0-3)", default=0, type=int, required=False)
+    parser.add_argument('--jsc', help="Path to .jsc file for constant pool resolution.", default=None)
     parser.add_argument('--detect-version', '--detect_version', '-V', dest='detect_version', action='store_true',
                         help="Detect V8, Node.js, and Electron version from input JSC file and exit.")
     args = parser.parse_args()
@@ -200,7 +252,7 @@ def main():
         disassembled = False
         if args.input_format == 'disassembled':
             disassembled = True
-        all_func = disassemble(args.inp, disassembled, args.d8 or args.path)
+        all_func = disassemble(args.inp, disassembled, args.d8 or args.path, jsc_path=args.jsc)
         if args.normalize:
             # Normalize before decompilation so every downstream artifact
             # (decompiled code, scope propagation, tree splitting) uses the

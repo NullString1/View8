@@ -116,3 +116,7 @@ def parse_disassembled_file(out_name: str):
     all_func = parse_file(out_name)
     print(f"Parsing completed successfully ({len(all_func)} functions found).")
     return all_func
+
+
+def parse_disassembled_text(text: str):
+    return parse_file(text)

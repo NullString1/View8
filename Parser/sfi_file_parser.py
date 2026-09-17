@@ -14,8 +14,23 @@ def set_repeat_line_flag(flag: bool):
     repeat_last_line = flag
 
 
-def get_next_line(file: str):
-    with open(file, encoding='utf-8', errors='ignore') as f:
+import os
+
+
+def get_next_line(source: str):
+    if "\n" in source or (not os.path.isfile(source) and ("[" in source or "@" in source or ":" in source)):
+        for line in source.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            yield line
+            if repeat_last_line:
+                set_repeat_line_flag(False)
+                yield line
+        while True:
+            yield None
+
+    with open(source, encoding='utf-8', errors='ignore') as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -24,7 +39,8 @@ def get_next_line(file: str):
             if repeat_last_line:
                 set_repeat_line_flag(False)
                 yield line
-    yield None
+    while True:
+        yield None
 
 
 def parse_array(lines, func_name: str) -> str:
@@ -84,7 +100,7 @@ def parse_bytecode_line(line: str) -> CodeLine:
 
 def parse_bytecode(line: str, lines) -> List[CodeLine]:
     code_list = []
-    while line and " @ " in line:
+    while line and "@" in line:
         code_list.append(parse_bytecode_line(line))
         line = next(lines)
     set_repeat_line_flag(True)
@@ -102,7 +118,7 @@ def parse_const_line(lines, func_name: str):
     value = value.strip()
 
     if not address:
-        return var_idx, value
+        return var_idx, clean_pool_value(value)
     if value.startswith("<String"):
         return var_idx, clean_pool_value(value)
     if value.startswith("<SharedFunctionInfo"):
@@ -117,7 +133,7 @@ def parse_const_line(lines, func_name: str):
         return var_idx, clean_pool_value(value)
     if "<root:" in value or "<ro-heap" in value:
         return var_idx, clean_pool_value(value)
-    return var_idx, value.rstrip('>').split(" ", 1)[-1]
+    return var_idx, clean_pool_value(value.rstrip('>').split(" ", 1)[-1])
 
 
 def parse_const_array(lines, func_name: str) -> List[str]:
@@ -194,7 +210,7 @@ def parse_register_count(line: str) -> int:
 
 
 def parse_address(line: str) -> str:
-    m = re.search(r"^(0x[0-9a-fA-F]+)", line)
+    m = re.search(r"(0x[0-9a-fA-F]+)", line)
     if m:
         return m.group(1)
     parts = line.split(":", 1)
@@ -273,6 +289,10 @@ def parse_file(file: str = "test.txt") -> Dict[str, SharedFunctionInfo]:
             break
 
     return all_functions
+
+
+def parse_text(text: str) -> Dict[str, SharedFunctionInfo]:
+    return parse_file(text)
 
 
 if __name__ == '__main__':

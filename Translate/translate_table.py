@@ -1,4 +1,5 @@
 import ast
+import re
 
 
 def expand_reg_list(reg_rang):
@@ -40,7 +41,22 @@ def invoke_intrinsic(args):
 
 
 def add_jump_blocks(obj, type_):
-    jump_to = int(obj.args[-1].split(' ')[-1][:-1])
+    jump_to = None
+    for arg in reversed(obj.args):
+        m = re.search(r"@\s*(\d+)", arg)
+        if m:
+            jump_to = int(m.group(1))
+            break
+        if arg.endswith(")") and arg[:-1].strip().isdigit():
+            jump_to = int(arg[:-1].strip())
+            break
+    if jump_to is None and obj.args:
+        m = re.search(r"\[(\d+)\]", obj.args[0])
+        if m:
+            jump_to = obj.offset + int(m.group(1))
+
+    if jump_to is None:
+        return
 
     if jump_to < obj.offset:
         obj.add_jump_to_table(jump_type="Loop", start=jump_to, end=obj.offset)

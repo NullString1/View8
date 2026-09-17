@@ -8,7 +8,7 @@ import struct
 import subprocess
 import sys
 import tempfile
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 _TABLES = None
 
@@ -275,6 +275,14 @@ def clean_pool_value(raw_value: str) -> str:
 
     raw_str = raw_value.strip()
 
+    # If it has a comment with a resolved value (e.g. "<unknown> ; <root: length_string = \"length\">")
+    if ";" in raw_str:
+        parts = raw_str.split(";", 1)
+        if parts[0].strip() == "<unknown>":
+            c_val = clean_pool_value(parts[1])
+            if c_val and c_val != parts[1].strip():
+                return c_val
+
     # 1. Match string formats: <String[19]: #amber-7749-octarine>
     if "<String" in raw_str:
         match = re.search(r"<String\[\d+\]:\s*#(.*?)>", raw_str)
@@ -319,11 +327,15 @@ def clean_pool_value(raw_value: str) -> str:
             return json.dumps(ident)
         return root_name
 
-    # 6. Numbers or raw literals
+    # 6. Already quoted JSON string (e.g. '"length"')
+    if (raw_str.startswith('"') and raw_str.endswith('"')) or (raw_str.startswith("'") and raw_str.endswith("'")):
+        return raw_str
+
+    # 7. Numbers or raw literals
     if raw_str.startswith("0x") or raw_str.isdigit() or (raw_str.startswith("-") and raw_str[1:].isdigit()):
         return raw_str
 
-    # 7. SFI names
+    # 8. SFI names
     if "<SharedFunctionInfo" in raw_str:
         sfi_match = re.search(r"<SharedFunctionInfo\s*([^>]*)>", raw_str)
         if sfi_match:
@@ -335,15 +347,56 @@ def clean_pool_value(raw_value: str) -> str:
     return raw_str
 
 
-def enrich_functions_from_jsc(all_functions: dict, jsc_path: str, version: str = "13.6.233.17"):
-    """Enrich constant pools of parsed functions using the raw .jsc file bytes."""
-    if not os.path.isfile(jsc_path):
+def enrich_functions_from_jsc(
+    all_functions: dict,
+    jsc_source: Optional[Union[str, bytes]] = None,
+    version: str = "13.6.233.17",
+    pool_overrides: Optional[dict] = None,
+):
+    """Enrich constant pools of parsed functions using raw .jsc bytes or direct pool overrides."""
+    if pool_overrides:
+        for fn_name, sfi in all_functions.items():
+            overrides = None
+            if fn_name in pool_overrides:
+                overrides = pool_overrides[fn_name]
+            elif hasattr(sfi, "name") and sfi.name in pool_overrides:
+                overrides = pool_overrides[sfi.name]
+            else:
+                addr_m = re.search(r"0x[0-9a-fA-F]+", fn_name)
+                if addr_m:
+                    hex_val = addr_m.group(0).lower()
+                    clean_hex = hex_val.removeprefix("0x")
+                    if clean_hex in pool_overrides:
+                        overrides = pool_overrides[clean_hex]
+                    elif hex_val in pool_overrides:
+                        overrides = pool_overrides[hex_val]
+
+            if overrides:
+                new_pool = list(sfi.const_pool) if sfi.const_pool else []
+                for item in overrides:
+                    if isinstance(item, (tuple, list)) and len(item) == 2:
+                        idx, val = item
+                        while len(new_pool) <= idx:
+                            new_pool.append("<unknown>")
+                        new_pool[idx] = clean_pool_value(str(val))
+                    elif isinstance(item, str):
+                        new_pool.append(clean_pool_value(item))
+                sfi.const_pool = new_pool
+
+    if not jsc_source:
+        return
+
+    data = None
+    if isinstance(jsc_source, bytes):
+        data = jsc_source
+    elif isinstance(jsc_source, str) and os.path.isfile(jsc_source):
+        with open(jsc_source, "rb") as f:
+            data = f.read()
+
+    if not data:
         return
 
     try:
-        with open(jsc_path, "rb") as f:
-            data = f.read()
-
         from Parser.rebuilder import Rebuilder
         rb = Rebuilder(data)
         ro_map, _ = query_oracle_status(data, version)
@@ -352,7 +405,7 @@ def enrich_functions_from_jsc(all_functions: dict, jsc_path: str, version: str =
         for sfi_name, sfi in all_functions.items():
             if not sfi.code or not sfi.const_pool:
                 continue
-            if not any(val == "<unknown>" or val == "<unknown>" for val in sfi.const_pool):
+            if not any(val == "<unknown>" for val in sfi.const_pool):
                 continue
 
             try:
@@ -369,7 +422,7 @@ def enrich_functions_from_jsc(all_functions: dict, jsc_path: str, version: str =
 
                 new_pool = []
                 for idx, val in enumerate(sfi.const_pool):
-                    if val.strip() == "<unknown>" or val == "<unknown>":
+                    if val.strip() == "<unknown>":
                         res_val = resolved_slots.get(idx)
                         if res_val:
                             # If it's a ro-heap ref, check oracle
@@ -384,7 +437,6 @@ def enrich_functions_from_jsc(all_functions: dict, jsc_path: str, version: str =
                         new_pool.append(clean_pool_value(val))
                 sfi.const_pool = new_pool
             except Exception:
-                # If matching fails for this SFI, keep as is
                 continue
     except Exception as e:
         sys.stderr.write(f"[poolinfo] enrichment skipped: {e}\n")
