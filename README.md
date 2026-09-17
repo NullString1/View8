@@ -4,6 +4,9 @@
 
 This enhanced version brings major decompilation improvements, pure Python snapshot and header analysis, and cross-platform Linux / macOS / Windows support.
 
+> [!NOTE]
+> **Disclaimer:** The enhancements and improvements in this fork were developed with the assistance of AI.
+
 ---
 
 ## Before vs After Comparison
