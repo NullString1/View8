@@ -130,11 +130,15 @@ While header decoding, root table lookup, function name discovery, and code simp
 - `--scope`: Propagate scope arguments (default: `1`).
 - `--normalize`: Rebase address-based function names deterministically.
 - `--normalize-map [CSV]`: Output CSV mapping original names to normalized names.
+- `--detect-version`, `-V`: Detect V8 version, matching Node.js release, and Electron release from input JSC file and exit.
 - `--tree`, `-t`: Export as hierarchical directory tree starting from root function.
 
 ### Quick Start
 
 ```bash
+# Detect V8, Node.js, and Electron versions from a .jsc file and exit
+python3 view8.py --inp app.jsc --detect-version
+
 # Decompile a .jsc file directly (using auto-detected d8/node)
 python3 view8.py --inp app.jsc --out app.decompiled.js
 

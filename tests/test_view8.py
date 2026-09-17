@@ -35,6 +35,17 @@ class TestView8Header(unittest.TestCase):
             self.assertIn(h["layout"], ("modern", "legacy"))
             self.assertGreater(h["payload_length"], 0)
 
+    def test_detect_version(self):
+        from Parser.header import find_version_info, detect_and_print_version
+        fixture = "/mdata/NS/Projects/jsc-edit/tests/fixtures/check.jsc"
+        if os.path.exists(fixture):
+            h = read_header_from_file(fixture)
+            info = find_version_info(h)
+            self.assertEqual(info["v8"], "13.6.233.17")
+            self.assertIn("v24", info["node"])
+            self.assertIn("v35", info["electron"])
+            self.assertTrue(detect_and_print_version(fixture))
+
 
 class TestPoolInfo(unittest.TestCase):
     def test_clean_pool_value_strings(self):

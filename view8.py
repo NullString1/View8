@@ -136,7 +136,18 @@ def main():
     parser.add_argument('--func', help="A function to be displayed.", default=None, required=False)
     parser.add_argument('--show_all', help="Should show lines marked as hidden (in function display mode)", default=False, required=False, action='store_true')
     parser.add_argument('--verbosity', '-v', help="Verbosity level (0-3)", default=0, type=int, required=False)
+    parser.add_argument('--detect-version', '--detect_version', '-V', dest='detect_version', action='store_true',
+                        help="Detect V8, Node.js, and Electron version from input JSC file and exit.")
     args = parser.parse_args()
+
+    if not os.path.isfile(args.inp):
+        raise FileNotFoundError(f"The input file {args.inp} does not exist.")
+
+    if args.detect_version:
+        import sys
+        from Parser.header import detect_and_print_version
+        success = detect_and_print_version(args.inp)
+        sys.exit(0 if success else 1)
 
     if args.normalize_map is not None and not args.normalize:
         parser.error("--normalize-map requires --normalize")
