@@ -172,11 +172,27 @@ class SharedFunctionInfo:
                 continue
             line.decompiled = re.sub(pattern, _replacement, line.decompiled)
 
+    def clean_decompiled_code(self):
+        prop_re = re.compile(r'(\b[a-zA-Z0-9_$]+)\["([a-zA-Z_$][a-zA-Z0-9_$]*)"\]')
+        for line in self.code:
+            if not line.decompiled:
+                continue
+            text = line.decompiled
+            # Replace obj["prop"] with obj.prop
+            text = prop_re.sub(r'\1.\2', text)
+            # Remove redundant ACCU = call(...) assignment if it is a statement call
+            if text.strip().startswith("ACCU = ") and ("(" in text and text.strip().endswith(")")):
+                indent = text[:len(text) - len(text.lstrip())]
+                call_expr = text.strip()[7:]
+                text = indent + call_expr
+            line.decompiled = text
+
     def decompile(self, global_vars: GlobalVars):
         self.translate_bytecode()
         self.simplify_bytecode()
         self.fill_global_variables(global_vars)
         self.replace_const_pool(global_vars)
+        self.clean_decompiled_code()
 
     def export(self, export_v8code=False, export_translated=False, export_decompiled=True):
         export_func = self.create_function_header() + '\n'

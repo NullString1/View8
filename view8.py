@@ -45,7 +45,11 @@ def disassemble(in_file, input_is_disassembled, disassembler):
         # Disassemble the file
         parse_v8cache_file(in_file, out_name, view8_dir, disassembler)
     
-    return parse_disassembled_file(out_name)
+    all_functions = parse_disassembled_file(out_name)
+    if not input_is_disassembled:
+        from Parser.poolinfo import enrich_functions_from_jsc
+        enrich_functions_from_jsc(all_functions, in_file)
+    return all_functions
 
 
 def decompile(all_functions):
@@ -84,6 +88,9 @@ def main():
     parser.add_argument('--inp', '-i', help="The input file name.", default=None, required=True)
     parser.add_argument('--out', '-o', help="The output file name.", default=None)
     parser.add_argument('--path', '-p', help="Path to disassembler binary. Required if the input is in the raw format.", default=None)
+    parser.add_argument('--d8', help="Path to d8 binary.", default=None)
+    parser.add_argument('--d8-dir', '--d8_dir', dest='d8_dir', help="Directory containing d8 binaries.", default=None)
+    parser.add_argument('--node', help="Path to node binary.", default=None)
     parser.add_argument('--export_format', '-e', nargs='+', choices=['v8_opcode', 'translated', 'decompiled', 'serialized'], 
                         help="Specify the export format(s). Options are 'v8_opcode', 'translated', 'decompiled', and 'serialized'. Multiple options can be combined.", 
                         default=['decompiled'])
@@ -182,7 +189,7 @@ def main():
         disassembled = False
         if args.input_format == 'disassembled':
             disassembled = True
-        all_func = disassemble(args.inp, disassembled, args.path)
+        all_func = disassemble(args.inp, disassembled, args.d8 or args.path)
         if args.normalize:
             # Normalize before decompilation so every downstream artifact
             # (decompiled code, scope propagation, tree splitting) uses the

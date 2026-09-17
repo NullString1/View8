@@ -239,9 +239,9 @@ operands = {
     "TestInstanceOf": lambda obj: f"ACCU = {obj.args[0]} instanceof ACCU",
     "TestReferenceEqual": lambda obj: f"ACCU = {obj.args[0]} === ACCU",
     "TestUndetectable": lambda obj: f"ACCU = undetectable === ACCU",
-    "TestTypeOf": lambda obj: f"ACCU = typeof(ACCU) == {get_typeof_value(obj.args[0])}",
-    "TestNull": lambda obj: f"ACCU = null == ACCU",
-    "TestUndefined": lambda obj: f"ACCU = undefined == ACCU",
+    "TestTypeOf": lambda obj: f"ACCU = (typeof ACCU === '{get_typeof_value(obj.args[0])}')",
+    "TestNull": lambda obj: f"ACCU = (ACCU === null)",
+    "TestUndefined": lambda obj: f"ACCU = (ACCU === undefined)",
 
     ###############
     # To operands #
@@ -283,7 +283,7 @@ operands = {
     "ModSmi": lambda obj: f"ACCU = (ACCU % {obj.args[0][1:-1]})",
     "MulSmi": lambda obj: f"ACCU = (ACCU * {obj.args[0][1:-1]})",
     "ExpSmi": lambda obj: f"ACCU = (ACCU ** {obj.args[0]})",
-    "DivSmi": lambda obj: f"ACCU = (ACCU \\ {obj.args[0][1:-1]})",
+    "DivSmi": lambda obj: f"ACCU = (ACCU / {obj.args[0][1:-1]})",
     "NegateSmi": lambda obj: f"ACCU = -(ACCU)",
     "BitwiseXorSmi": lambda obj: f"ACCU = (ACCU ^ {obj.args[0][1:-1]})",
     "BitwiseOrSmi": lambda obj: f"ACCU = (ACCU | {obj.args[0][1:-1]})",
@@ -298,8 +298,8 @@ operands = {
     # throw operands #
     ##################
 
-    "Throw": lambda obj: "",
-    "ReThrow": lambda obj: "",
+    "Throw": lambda obj: "throw ACCU",
+    "ReThrow": lambda obj: "throw ACCU",
     "ThrowSuperNotCalledIfHole": lambda obj: "",
     "ThrowSuperAlreadyCalledIfNotHole": lambda obj: "",
     "ThrowIfNotSuperConstructor": lambda obj: "",
@@ -312,9 +312,9 @@ operands = {
 
     "Mov": lambda obj: f"{obj.args[1]} = {obj.args[0]}",
     "Return": lambda obj: f"return ACCU",
-    "TypeOf": lambda obj: f"ACCU = TypeOf(ACCU)",
+    "TypeOf": lambda obj: f"ACCU = typeof ACCU",
     "GetIterator": lambda obj: f"ACCU = GetIterator({obj.args[0]})",
-    "GetSuperConstructor": lambda obj: f"{obj.args[0]} = supper",
+    "GetSuperConstructor": lambda obj: f"{obj.args[0]} = super",
     "DeletePropertySloppy": lambda obj: f"delete ACCU[{obj.args[0]}]",
     "DeletePropertyStrict": lambda obj: f"delete ACCU[{obj.args[0]}]",
 
@@ -327,7 +327,7 @@ operands = {
     "SetPendingMessage": lambda obj: f"",
     "SwitchOnGeneratorState": lambda obj: "",
     "SwitchOnSmiNoFeedback": lambda obj: add_switch_on(obj) or "",
-    "LdaTheHole": lambda obj: f"ACCU = null",
+    "LdaTheHole": lambda obj: f"ACCU = undefined",
     "Debugger": lambda obj: f"//Debugger",
 
     ###################
@@ -351,21 +351,15 @@ operands = {
     "ForInNext": lambda obj: f"ACCU = {obj.args[0]}.next().value",
     "ForInStep": lambda obj: f"ACCU = GeneratorStep({obj.args[0]})",
 
-    "Not Found": lambda obj: input(f"Operator {obj.operator} was not found in table") and f"//{obj.operator})",
+    "LdaLookupSlotInsideTypeof": lambda obj: f"ACCU = typeof ConstPool{obj.args[0]}",
+    "LdaLookupContextSlotInsideTypeof": lambda obj: f"ACCU = typeof Scope[CURRENT-{obj.args[2][1:-1]}]{obj.args[1]}",
+    "LdaLookupGlobalSlotInsideTypeof": lambda obj: f"ACCU = typeof ConstPool{obj.args[0]}",
+    "LdaModuleVariable": lambda obj: f"ACCU = module_var_{obj.args[0]}",
+    "StaModuleVariable": lambda obj: f"module_var_{obj.args[0]} = ACCU",
+    "CollectTypeProfile": lambda obj: "",
+    "CallRuntimeForPair": lambda obj: f"ACCU = {obj.args[0][1:-1]}({', '.join(expand_reg_list(obj.args[1]))})",
+    "IncBlockCounter": lambda obj: "",
+    "Abort": lambda obj: "throw new Error('Abort')",
 
+    "Not Found": lambda obj: f"// {obj.operator}({', '.join(obj.args) if obj.args else ''})",
 }
-
-# more operators to add
-# LdaLookupSlotInsideTypeof
-# LdaLookupContextSlotInsideTypeof
-# LdaLookupGlobalSlotInsideTypeof
-#
-# LdaModuleVariable
-# StaModuleVariable
-#
-# CollectTypeProfile
-#
-# CallRuntimeForPair
-#
-# IncBlockCounter
-# Abort
